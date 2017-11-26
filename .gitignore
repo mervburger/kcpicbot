@@ -1,0 +1,7 @@
+composer.lock
+auth.php
+main-test.php
+main-v0.1.php
+/vendor
+/images/*.jpg
+/images/*.png
