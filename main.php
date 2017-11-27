@@ -28,10 +28,11 @@ chdir('images/');
 $url = substr($url, 0, -11);
 
 // Filter out Danbooru Gold-only, removed posts, or anything that has been posted already
+// Temporarily check against file_url while the cache transitions over to sample images
 foreach ( $result as $r_key => $r ) {
 	if ( !array_key_exists('md5', $r) ) {
 		unset($result[$r_key]);
-	} elseif ( file_exists($r['md5'].substr($r['file_url'], -4)) ) {
+	} elseif ( file_exists($r['md5'].substr($r['large_file_url'], -4)) || file_exists($r['md5'].substr($r['file_url'], -4)) ) {
 		unset($result[$r_key]);
 	}
 }
@@ -47,12 +48,12 @@ $result = array_values($result);
 
 // Select first (newest) post, and print it for debug purposes
 $post = $result[0];
-$filename = $post['md5'].substr($post['file_url'], -4);
+$filename = $post['md5'].substr($post['large_file_url'], -4);
 print_r($post);
 echo "\n";
 
 // Get image file
-exec('wget -O ' . $filename . ' ' . $url.$post['file_url']);
+exec('wget -O ' . $filename . ' ' . $url.$post['large_file_url']);
 
 // Make Twitter Connection, set timeouts to be appropriate for my internet connection
 // The default values would sometimes timeout during the file upload, a minute should be generous enough
