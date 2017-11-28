@@ -25,4 +25,4 @@ This is kind of harsh on Danbooru, since it pulls 200 posts at a time, and does 
 
 ~~It's also harsh on your local storage. Since there's no local cache, how is it to know how to avoid reposts? It saves the image and keeps it, and uses the images as a sort of cache, checking if the file exists and skips the post if the file does exist. Again, bad, because it just takes up space. I would also assume it's slow? But fine for my purposes, as this is just running on a spare file server in my house.~~
 
-The script now caches the files that it has posted, my file server thanks me. Danbooru's servers will have to wait on me, I guess.
+The script now caches the list of files that it has posted, my file server thanks me. Danbooru's servers will have to wait on me, I guess.
