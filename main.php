@@ -1,6 +1,8 @@
 <?php
+echo "Running at: " . date('m-d-Y H:i:s') . "\n";
 // Twitter OAuth
 require "vendor/autoload.php";
+require_once 'vendor/cosenary/simple-php-cache/cache.class.php';
 use Abraham\TwitterOAuth\TwitterOAuth;
 
 // Ensure this runs out of the directory the script is in
@@ -12,12 +14,15 @@ $search = array (
 	'limit' => '200',
 );
 
+// Get our cache
+$cache = new Cache('posts');
+$files = $cache->retrieve('posts');
+
 // Some prep
-chdir('images/');
 $url = 'https://safebooru.donmai.us';
 
 $result = getPosts($search);
-$result = filterExisting($result);
+$result = filterExisting($result, $files);
 
 $i = 1;
 if ( $result == false ) {
@@ -26,7 +31,7 @@ if ( $result == false ) {
 		echo "No posts available! Trying page " . $i . "\n";
 		$search['page'] = $i;
 		$result = getPosts($search);
-		$result = filterExisting($result);
+		$result = filterExisting($result, $files);
 	}
 }
 
@@ -34,13 +39,19 @@ echo "Number of posts available (On page " . $i . "): " . count($result) . "\n";
 
 // Select first (newest) post, and print it for debug purposes
 $post = $result[0];
-$filename = $post['md5'].substr($post['large_file_url'], -4);
+$filename = 'images/' . $post['md5'].substr($post['large_file_url'], -4);
 print_r($post);
 echo "\n";
 
 // Get image file
 exec('wget -O ' . $filename . ' ' . $url.$post['large_file_url']);
-postTweet($post, $filename);
+
+// Post tweet, if successful, add the post to the cache so we don't repost it.
+if ( postTweet($post, $filename) == true ) {
+	$new[] = $post['md5'];
+	$files = array_merge($files, $new);
+	$cache->store('posts', $files);
+}
 
 function getPosts($search) {
 	//Danbooru API Endpoint
@@ -58,7 +69,7 @@ function getPosts($search) {
 	return $result;
 }
 
-function filterExisting($result) {
+function filterExisting($result, $cache) {
 	if ( !is_array($result) ) {
 		echo "Woah, that's a bad error (provided thing to filter not an array, maybe Danbooru is down?)\n";
 		die;
@@ -69,7 +80,7 @@ function filterExisting($result) {
 	foreach ( $result as $r_key => $r ) {
 		if ( !array_key_exists('md5', $r) ) {
 			unset($result[$r_key]);
-		} elseif ( file_exists($r['md5'].substr($r['large_file_url'], -4)) || file_exists($r['md5'].substr($r['file_url'], -4)) ) {
+		} elseif ( in_array($r['md5'], $cache) ) {
 			unset($result[$r_key]);
 		}
 	}
@@ -90,7 +101,7 @@ function postTweet($post, $filename) {
 	include 'auth.php'; // File with keys and secret keys
 
 	// Make Twitter Connection, set timeouts to be appropriate for my internet connection
-	// The default values would sometimes timeout during the file upload, a minute should be generous enough
+	// The default values would sometimes timeout during the file upload, I hope these are generous enough for my shit connection
 	try {
 		$connection = new TwitterOAuth($consumer_key, $consumer_secret, $access_token, $access_secret);
 	} catch ( TwitterOAuthException $e ) {
@@ -98,7 +109,7 @@ function postTweet($post, $filename) {
 		unlink($filename);
 		die;
 	}
-	$connection->setTimeouts(10, 60);
+	$connection->setTimeouts(30, 120);
 
 	// Upload file and generate the media_id
 	$picture = $connection->upload('media/upload', ['media' => getcwd() . '/' . $filename]);
@@ -128,6 +139,8 @@ function postTweet($post, $filename) {
 
 	if ( $connection->getLastHttpCode() == 200 ) {
 		echo "Completed successfully!\n";
+		unlink($filename);
+		return true;
 	} else {
 		unlink($filename);
 		echo "Tweet not sent correctly: " . $connection->getLastHttpCode() . "\n";

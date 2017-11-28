@@ -1,8 +1,9 @@
 composer.lock
 auth.php
-main-test.php
-main-v0.1.php
-main-v0.2.php
+main-*.php
+initcache.php
+
 /vendor
 /images/*.jpg
 /images/*.png
+/cache/*.cache
