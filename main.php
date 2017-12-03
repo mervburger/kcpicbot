@@ -16,19 +16,16 @@ $search = array (
 
 // Get our cache
 $cache = new Cache('posts');
-$files = $cache->retrieve('posts'); // md5s of danbooru posts that have been posted before
-$page = $cache->retrieve('page'); // the last page we have pulled from (if there are no new posts)
+$files = $cache->retrieve('posts');
 
 // Some prep
 $url = 'https://safebooru.donmai.us';
 
-// Get the first page of posts and see if there are any new ones
 $result = getPosts($search);
 $result = filterExisting($result, $files);
 
-$i = (!empty($page)) ? $page : 1;
+$i = 1;
 if ( $result == false ) {
-// No new posts available, go through the history
 	while ( $result == false ) {
 		$i++;
 		echo "No posts available! Trying page " . $i . "\n";
@@ -37,7 +34,6 @@ if ( $result == false ) {
 		$result = filterExisting($result, $files);
 	}
 }
-$cache->store('page', $i);
 
 echo "Number of posts available (On page " . $i . "): " . count($result) . "\n";
 
