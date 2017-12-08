@@ -10,7 +10,7 @@ chdir(__dir__);
 
 //Format search string, and make it JSON
 $search = array (
-	'tags' => 'kantai_collection',
+	'tags' => 'kantai_collection -webm',
 	'limit' => '200',
 );
 
@@ -38,8 +38,8 @@ if ( $result == false ) {
 			$i++;
 		}
 	}
+	$cache->store('page', $i);
 }
-$cache->store('page', $i);
 
 echo "Number of posts available" . (isset($i) ? " (On page " . $i . ")" : '') . ": " . count($result) . "\n";
 
@@ -118,9 +118,14 @@ function postTweet($post, $filename) {
 	$connection->setTimeouts(30, 120);
 
 	// Upload file and generate the media_id
-	$picture = $connection->upload('media/upload', ['media' => getcwd() . '/' . $filename]);
+	$picture = $connection->upload('media/upload', ['media' => getcwd() . '/' . $filename, 'media_type' => mime_content_type(getcwd() . '/' . $filename)], true);
 
-	if ( $connection->getLastHttpCode() != 200 ) {
+	// We need to wait while twitter potentially need to processes our upload
+	// From: https://github.com/abraham/twitteroauth/issues/554
+	// This is a lazy solution until proper STATUS checking is in TwitterOAuth
+	sleep(30);
+
+	if ( $connection->getLastHttpCode() != 201) {
 		unlink($filename);
 		echo "File not uploaded successfully: " . $connection->getLastHttpCode() . "\n";
 		die;
