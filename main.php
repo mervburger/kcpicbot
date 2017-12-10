@@ -82,11 +82,13 @@ function filterExisting($result, $cache) {
 	}
 
 	// Filter out Danbooru Gold-only, removed posts, or anything that has been posted already
-	// Temporarily check against file_url while the cache transitions over to sample images
+	// Filter out pixiv ugoira posts, as they are just zip files, and cannot be posted to twitter
 	foreach ( $result as $r_key => $r ) {
 		if ( !array_key_exists('md5', $r) ) {
 			unset($result[$r_key]);
 		} elseif ( in_array($r['md5'], $cache) ) {
+			unset($result[$r_key]);
+		} elseif ( isset($r['pixiv_ugoira_frame_data']) ) {
 			unset($result[$r_key]);
 		}
 	}
@@ -123,6 +125,7 @@ function postTweet($post, $filename) {
 	// We need to wait while twitter potentially need to processes our upload
 	// From: https://github.com/abraham/twitteroauth/issues/554
 	// This is a lazy solution until proper STATUS checking is in TwitterOAuth
+	echo "Waiting for twitter processing...\n";
 	sleep(30);
 
 	if ( $connection->getLastHttpCode() != 201) {
