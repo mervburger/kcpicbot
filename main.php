@@ -136,10 +136,14 @@ function postTweet($post, $filename) {
 
 	// Generate status text. This prefers crediting the artist over character names
 	$status = 'http://danbooru.donmai.us/posts/' . $post['id'];
-	if ( strlen($post['tag_string_character'] . ' by ' . $post['tag_string_artist']) < 200 ) {
-		$status .= ' ' . str_replace('_', ' ', $post['tag_string_character']) . ' by ' . str_replace('_', ' ', $post['tag_string_artist']);
-	} else {
-		$status .= ' by ' . str_replace('_', ' ', $post['tag_string_artist']);
+	if ( $post['tag_count_artist'] != 0 ) {
+		if ( ($post['tag_count_character'] != 0) && (strlen($post['tag_string_character'] . ' by ' . $post['tag_string_artist']) < 200) ) {
+			$status .= ' ' . str_replace('_', ' ', $post['tag_string_character']) . ' by ' . str_replace('_', ' ', $post['tag_string_artist']);
+		} else {
+			$status .= ' by ' . str_replace('_', ' ', $post['tag_string_artist']);
+		}
+	} else if ( ($post['tag_count_character'] != 0) && (strlen($post['tag_string_character']) < 200) ) {
+			$status .= ' ' . str_replace('_', ' ', $post['tag_string_character']);
 	}
 
 	// Tweet parameters, as per Twitter API
