@@ -90,6 +90,8 @@ function filterExisting($result, $cache) {
 			unset($result[$r_key]);
 		} elseif ( isset($r['pixiv_ugoira_frame_data']) ) {
 			unset($result[$r_key]);
+		} elseif ( isset($r['file_ext']) && ($r['file_ext'] == 'mp4') ) {
+			unset($result[$r_key]);
 		}
 	}
 
