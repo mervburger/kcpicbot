@@ -19,9 +19,6 @@ $cache = new Cache('posts');
 $files = $cache->retrieve('posts'); // md5s of danbooru posts that have been posted before
 $page = $cache->retrieve('page'); // the last page we have pulled from (if there are no new posts)
 
-// Some prep
-$url = 'https://safebooru.donmai.us';
-
 // Get the first page of posts and see if there are any new ones
 $result = getPosts($search);
 $result = filterExisting($result, $files);
@@ -50,7 +47,12 @@ print_r($post);
 echo "\n";
 
 // Get image file
-exec('wget -O ' . $filename . ' ' . $url.$post['large_file_url']);
+if ( substr($post['large_file_url'], 0, 4) === 'http' ) {
+	$url = $post['large_file_url'];
+} else {
+	$url = 'https://safebooru.donmai.us'.$post['large_file_url'];
+}
+exec('wget -O ' . $filename . ' ' . $url);
 
 // Post tweet, if successful, add the post to the cache so we don't repost it.
 if ( postTweet($post, $filename) == true ) {
