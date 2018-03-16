@@ -94,6 +94,8 @@ function filterExisting($result, $cache) {
 			unset($result[$r_key]);
 		} elseif ( isset($r['file_ext']) && ($r['file_ext'] == 'mp4') ) {
 			unset($result[$r_key]);
+		} elseif ( isset($r['is_deleted']) && ($r['is_deleted'] == 1) ) {
+			unset($result[$r_key]);
 		}
 	}
 
