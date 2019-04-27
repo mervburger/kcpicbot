@@ -151,7 +151,7 @@ function postTweet($post, $filename) {
 	// Status checking only needs to be done on videos and gifs if Twitter says it needs to be done
 	// with the processing_info property after a FINALIZE command
 	if ( $connection->getLastHttpCode() != 201 ) {
-		if ( proptery_exists($picture->processing_info) ) {
+		if ( property_exists($picture->processing_info) ) {
 			$limit = 0;
 			do {
 				echo "Waiting for twitter processing... \n";
