@@ -129,7 +129,7 @@ function postTweet($post, $filename) {
 	echo "Uploading to Twitter...\n";
 	$timer = time();
 	$picture = $connection->upload('media/upload', ['media' => getcwd() . '/' . $filename, 'media_type' => mime_content_type(getcwd() . '/' . $filename)], true);
-	echo "Finished upload. (" . time() - $timer . " seconds)\n";
+	echo "Finished upload. (" . (time() - $timer) . " seconds)\n";
 
 	// We never need the actual image file after this, just unlink it now.
 	unlink($filename);
