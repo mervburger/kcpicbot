@@ -24,9 +24,15 @@ $result = getPosts($search);
 $result = filterExisting($result, $files);
 
 if ( $result == false ) {
+	if ( $page > 1000 ) {
+		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
+		echo "Resetting page number and hoping...\n";
+		$cache->erase('page');
+		$page = 1;
+	}
 	$i = (!empty($page)) ? $page : 1;
 	// No new posts available, go through the history
-	while ( $result == false ) {
+	while ( $result == false && $i <= 1000 ) {
 		echo "No posts available! Trying page " . $i . "\n";
 		$search['page'] = $i;
 		$result = getPosts($search);
@@ -36,6 +42,11 @@ if ( $result == false ) {
 		}
 	}
 	$cache->store('page', $i);
+	if ( $i > 1000 ) {
+		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
+		echo "Next execution will reset page counter and try again.\n";
+		die;
+	}
 }
 
 echo "Number of posts available" . (isset($i) ? " (On page " . $i . ")" : '') . ": " . count($result) . "\n";
