@@ -24,6 +24,13 @@ $result = getPosts($search);
 $result = filterExisting($result, $files);
 
 if ( $result == false ) {
+	/* Danbooru has an anonymous user page limit of 1000
+	 * Gold users can go up to 2000, platinum up to 5000 (a general TODO is
+	 * support for Danbooru API keys and the differences between these
+	 * accounts.)
+	 * This solution assumes posts were likely missed over time, so just reset
+	 * the page counter and try again from the beginning.
+	 */ 
 	if ( $page > 1000 ) {
 		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
 		echo "Resetting page number and hoping...\n";
@@ -94,8 +101,15 @@ function filterExisting($result, $cache) {
 		die;
 	}
 
-	// Filter out Danbooru Gold-only, removed posts, or anything that has been posted already
-	// Filter out pixiv ugoira posts, as they are just zip files, and cannot be posted to twitter
+	/* Filter out Danbooru Gold-only, removed posts, or anything that has been
+	 * posted already.
+	 * Danbooru posts you do not have access to (removed due to artist claim,
+	 * gold-only, etc,) do not have an MD5
+	 * Filter out pixiv ugoira posts, as they are just zip files, and cannot be
+	 * posted to twitter - these posts have the 'pixiv_ugoira_frame_data' key
+	 * I believe I had mp4s removed due to the lack of status checking (and I
+	 * was not aware of it at the time,) this should be safely re-added now
+	 */
 	foreach ( $result as $r_key => $r ) {
 		if ( !array_key_exists('md5', $r) ) {
 			unset($result[$r_key]);
@@ -125,8 +139,10 @@ function filterExisting($result, $cache) {
 function postTweet($post, $filename) {
 	include 'auth.php'; // File with keys and secret keys
 
-	// Make Twitter Connection, set timeouts to be appropriate for my internet connection
-	// The default values would sometimes timeout during the file upload, I hope these are generous enough for my shit connection
+	/* Make Twitter Connection, set timeouts to be appropriate for my internet
+	 * connection. The default values would sometimes timeout during the file
+	 * upload, I hope these are generous enough for bad connections.
+	 */
 	try {
 		$connection = new TwitterOAuth($consumer_key, $consumer_secret, $access_token, $access_secret);
 	} catch ( TwitterOAuthException $e ) {
@@ -145,22 +161,11 @@ function postTweet($post, $filename) {
 	// We never need the actual image file after this, just unlink it now.
 	unlink($filename);
 
-	// We need to wait while twitter potentially need to processes our upload
-	// From: https://github.com/abraham/twitteroauth/issues/554
-	// This is a lazy solution until proper STATUS checking is in TwitterOAuth
-	//echo "Waiting for twitter processing...\n";
-	//sleep(30);
-
-	/*if ( $connection->getLastHttpCode() != 201) {
-		unlink($filename);
-		echo "File not uploaded successfully: " . $connection->getLastHttpCode() . "\n";
-		die;
-	}*/
-	//print_r($picture);
-	//print_r($connection->getLastHttpCode()); echo "\n";
-	
-	// Status checking only needs to be done on videos and gifs if Twitter says it needs to be done
-	// with the processing_info property after a FINALIZE command
+	/* We need to wait while twitter potentially needs to processes our upload
+	 * Status checking only needs to be done on videos and gifs if Twitter says
+	 * it needs to be done with the processing_info property after a FINALIZE
+	 * command
+	 */
 	if ( $connection->getLastHttpCode() != 201 ) {
 		if ( property_exists($picture->processing_info) ) {
 			$limit = 0;
@@ -181,6 +186,7 @@ function postTweet($post, $filename) {
 			echo "Status Code: ";
 			print_r($connection->getLastHttpCode());
 			echo "\n";
+			die;
 		}
 	}
 
@@ -207,10 +213,8 @@ function postTweet($post, $filename) {
 
 	if ( $connection->getLastHttpCode() == 200 ) {
 		echo "Completed successfully!\n";
-		//unlink($filename);
 		return true;
 	} else {
-		//unlink($filename);
 		echo "Tweet not sent correctly: " . $connection->getLastHttpCode() . "\n";
 		die;
 	}
