@@ -117,14 +117,12 @@ function filterExisting($result, $cache) {
 			unset($result[$r_key]);
 		} elseif ( isset($r['pixiv_ugoira_frame_data']) ) {
 			unset($result[$r_key]);
-		} elseif ( isset($r['file_ext']) && ($r['file_ext'] == 'mp4') ) {
-			unset($result[$r_key]);
 		} elseif ( isset($r['is_deleted']) && ($r['is_deleted'] == 1) ) {
 			unset($result[$r_key]);
 		}
 	}
 
-	// Check if the previous loop removed every post found. Output possible posts otherwise (debug for timing on cron job)
+	// Check if the previous loop removed every post found.
 	if ( empty($result) ) {
 		return false;
 	}
@@ -174,7 +172,7 @@ function postTweet($post, $filename) {
 				$upStatus = $connection->mediaStatus($picture->media_id_string);
 				sleep(5);
 				$limit++;
-				if ( $limit > 10 ) {
+				if ( $limit > 12 ) {
 					echo "Limit exceeded! Tweet will likely fail! Debug: \n";
 					print_r($picture);
 					print_r($upStatus);
