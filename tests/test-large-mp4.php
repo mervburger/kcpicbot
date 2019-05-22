@@ -5,10 +5,14 @@ require "vendor/autoload.php";
 require_once 'vendor/cosenary/simple-php-cache/cache.class.php';
 use Abraham\TwitterOAuth\TwitterOAuth;
 
+// Constants definitions
+define('MAX_ATTEMPTS', 5);
+
 // Ensure this runs out of the directory the script is in
 chdir(__dir__);
 
 //Danbooru API Endpoint
+//$apiurl = 'https://safebooru.donmai.us/posts/3513106.json';
 $apiurl = 'https://safebooru.donmai.us/posts/3337078.json';
 
 //cURL
@@ -112,32 +116,60 @@ function postTweet($post, $filename) {
 	// Upload file and generate the media_id
 	echo "Uploading to Twitter...\n";
 	$timer = time();
-	$picture = $connection->upload('media/upload', ['media' => getcwd() . '/' . $filename, 'media_type' => mime_content_type(getcwd() . '/' . $filename)], true);
-	echo "Finished upload. (" . (time() - $timer) . " seconds)\n";
+
+	// Set upload parameters
+	$picture_parameters = array(
+		'media' => getcwd() . '/' . $filename,
+		'media_type' => mime_content_type(getcwd() . '/' . $filename),
+	);
+
+	// Set media_category to allow larger uploads for videos and GIFs
+	if ( $picture_parameters['media_type'] == 'image/gif' ) {
+		$picture_parameters['media_category'] = 'TweetGif';
+	} elseif ( $picture_parameters['media_type'] == 'video/mp4' ) {
+		$picture_parameters['media_category'] = 'TweetVideo';
+	}
+	
+	$attempts = 0;
+	do {
+		try {
+			$picture = $connection->upload('media/upload', $picture_parameters, true);
+		} catch ( TwitterOAuthException $e ) {
+			echo 'OAuth Exception: ', $e->getMessage(), "\n";
+			$attempts++;
+			sleep(10);
+			continue;
+		}
+
+		break;
+	} while ( $attempts < MAX_ATTEMPTS );
+
+	print_r($picture);
 
 	// We never need the actual image file after this, just unlink it now.
 	unlink($filename);
-	print_r($picture);
-	print_r($connection->getLastHttpCode()); die;
+
 	/* We need to wait while twitter potentially needs to processes our upload
 	 * Status checking only needs to be done on videos and gifs if Twitter says
 	 * it needs to be done with the processing_info property after a FINALIZE
 	 * command
 	 */
 	if ( $connection->getLastHttpCode() != 201 ) {
-		if ( property_exists($picture->processing_info) ) {
+		if ( property_exists($picture, 'processing_info') ) {
 			$limit = 0;
 			do {
 				echo "Waiting for twitter processing... \n";
 				$upStatus = $connection->mediaStatus($picture->media_id_string);
 				sleep(5);
 				$limit++;
-				if ( $limit > 12 ) {
-					echo "Limit exceeded! Tweet will likely fail! Debug: \n";
+				if ( $limit == MAX_ATTEMPTS ) {
+					echo "Processing limit met! Tweet will likely fail! Debug: \n";
 					print_r($picture);
 					print_r($upStatus);
+				} else {
+					print_r($upStatus);
 				}
-			} while ( $upStatus->processing_info->state !== 'succeeded' && $limit <= 10 );
+			} while ( $upStatus->processing_info->state !== 'succeeded' && $limit <= MAX_ATTEMPTS );
 		} else {
 			echo "File upload unsuccessful! \n";
 			print_r($picture);
@@ -147,6 +179,8 @@ function postTweet($post, $filename) {
 			die;
 		}
 	}
+	echo "Finished upload. (" . (time() - $timer) . " seconds)\n";
+	die;
 
 	// Generate status text. This prefers crediting the artist over character names
 	$status = 'http://danbooru.donmai.us/posts/' . $post['id'];
@@ -167,7 +201,18 @@ function postTweet($post, $filename) {
 	];
 
 	// Make tweet
-	$result = $connection->post('statuses/update', $tweet);
+	$attempts = 0;
+	do {
+		try {
+			$result = $connection->post('statuses/update', $tweet);
+		} catch ( TwitterOAuthException $e ) {
+			echo 'OAuth Exception: ', $e->getMessage(), "\n";
+			$attempts++;
+			sleep(5);
+		}
+
+		break;
+	} while ( $attempts < MAX_ATTEMPTS );
 
 	if ( $connection->getLastHttpCode() == 200 ) {
 		echo "Completed successfully!\n";
