@@ -8,3 +8,4 @@ initcache.php
 /images/*.jpg
 /images/*.png
 /cache/*.cache
+*.code-workspace
