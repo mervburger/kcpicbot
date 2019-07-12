@@ -1,6 +1,6 @@
 {
     "require": {
-        "abraham/twitteroauth": "^0.7.4",
+        "abraham/twitteroauth": "^1.0",
         "cosenary/simple-php-cache": "dev-master"
     }
 }

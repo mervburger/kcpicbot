@@ -1,4 +1,5 @@
 composer.lock
+composer.phar
 auth.php
 main-*.php
 initcache.php
@@ -7,3 +8,4 @@ initcache.php
 /images/*.jpg
 /images/*.png
 /cache/*.cache
+*.code-workspace

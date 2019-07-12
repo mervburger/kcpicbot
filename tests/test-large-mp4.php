@@ -11,58 +11,18 @@ define('MAX_ATTEMPTS', 5);
 // Ensure this runs out of the directory the script is in
 chdir(__dir__);
 
-//Format search string, and make it JSON
-$search = array (
-	'tags' => 'kantai_collection -webm',
-	'limit' => '200',
-);
+//Danbooru API Endpoint
+//$apiurl = 'https://safebooru.donmai.us/posts/3513106.json';
+$apiurl = 'https://safebooru.donmai.us/posts/3337078.json';
 
-// Get our cache
-$cache = new Cache('posts');
-$files = $cache->retrieve('posts'); // md5s of danbooru posts that have been posted before
-$page = $cache->retrieve('page'); // the last page we have pulled from (if there are no new posts)
+//cURL
+$result = exec('curl -X GET "' . $apiurl . '" -H "Content-Type: application/json"');
 
-// Get the first page of posts and see if there are any new ones
-$result = getPosts($search);
-$result = filterExisting($result, $files);
-
-if ( $result == false ) {
-	/* Danbooru has an anonymous user page limit of 1000
-	 * Gold users can go up to 2000, platinum up to 5000 (a general TODO is
-	 * support for Danbooru API keys and the differences between these
-	 * accounts.)
-	 * This solution assumes posts were likely missed over time, so just reset
-	 * the page counter and try again from the beginning.
-	 */ 
-	if ( $page > 1000 ) {
-		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
-		echo "Resetting page number and hoping...\n";
-		$cache->erase('page');
-		$page = 1;
-	}
-	$i = (!empty($page)) ? $page : 1;
-	// No new posts available, go through the history
-	while ( $result == false && $i <= 1000 ) {
-		echo "No posts available! Trying page " . $i . "\n";
-		$search['page'] = $i;
-		$result = getPosts($search);
-		$result = filterExisting($result, $files);
-		if ( $result == false ) {
-			$i++;
-		}
-	}
-	$cache->store('page', $i);
-	if ( $i > 1000 ) {
-		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
-		echo "Next execution will reset page counter and try again.\n";
-		die;
-	}
-}
-
-echo "Number of posts available" . (isset($i) ? " (On page " . $i . ")" : '') . ": " . count($result) . "\n";
+//Take result and parse it
+$result = json_decode($result, true);
 
 // Select first (newest) post, and print it for debug purposes
-$post = $result[0];
+$post = $result;
 $filename = 'images/' . $post['md5'].substr($post['large_file_url'], -4);
 print_r($post);
 echo "\n";
@@ -163,19 +123,8 @@ function postTweet($post, $filename) {
 		'media_type' => mime_content_type(getcwd() . '/' . $filename),
 	);
 
-	// Determine if a gif is animated
-	if ( $picture_parameters['media_type'] == 'image/gif' ) {
-		$meta_tags = explode(' ', $post['tag_string_meta']);
-		$is_animated_gif = false;
-		foreach ( $meta_tags as $tag ) {
-			if ( $tag == 'animated' || $tag == 'animated_gif') {
-				$is_animated_gif = true;
-			}
-		}
-	}
-	
 	// Set media_category to allow larger uploads for videos and GIFs
-	if ( $picture_parameters['media_type'] == 'image/gif' && $is_animated_gif ) {
+	if ( $picture_parameters['media_type'] == 'image/gif' ) {
 		$picture_parameters['media_category'] = 'TweetGif';
 	} elseif ( $picture_parameters['media_type'] == 'video/mp4' ) {
 		$picture_parameters['media_category'] = 'TweetVideo';
@@ -211,7 +160,7 @@ function postTweet($post, $filename) {
 			do {
 				echo "Waiting for twitter processing... \n";
 				$upStatus = $connection->mediaStatus($picture->media_id_string);
-				sleep(10);
+				sleep(5);
 				$limit++;
 				if ( $limit == MAX_ATTEMPTS ) {
 					echo "Processing limit met! Tweet will likely fail! Debug: \n";
@@ -231,6 +180,7 @@ function postTweet($post, $filename) {
 		}
 	}
 	echo "Finished upload. (" . (time() - $timer) . " seconds)\n";
+	die;
 
 	// Generate status text. This prefers crediting the artist over character names
 	$status = 'http://danbooru.donmai.us/posts/' . $post['id'];
