@@ -5,7 +5,7 @@ Used for my bot [@kcpicbot](https://twitter.com/kcpicbot).
 
 Hard-coded for the `kantai_collection` tag, but can be easily modified to use any combination of tags.
 
-Current version tested against PHP 7.0.33 on openmediavault 4 (Debian Stretch.)
+Current version runs on PHP 7.0 on openmediavault 4 (Debian Stretch.) Developed with PHP 7.3 on Fedora 29 and 30.
 
 Uses [TwitterOAuth by Abraham Williams](https://twitteroauth.com/) for Twitter authentication integration, and [Simple PHP Cache by Christian Metz](https://github.com/cosenary/Simple-PHP-Cache) for cacheing.
 
@@ -15,6 +15,8 @@ Meant to be ran from a command line via a cron job. Something like this will pos
 ```
 */15 * * * * php /path/to/main.php
 ```
+
+It also outputs diagnostic information, so redirecting its output to a log file is useful, if you care about that.
 
 If you choose to use this, make a copy of `auth.sample.php` as `auth.php`, and set the variables to your Twitter API keys.
 
