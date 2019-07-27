@@ -7,6 +7,7 @@ use Abraham\TwitterOAuth\TwitterOAuth;
 
 // Constants definitions
 define('MAX_ATTEMPTS', 5);
+define('POST_RETRY_TIME', 21600); // Time between when a bad post can be attempted again, in seconds
 
 // Ensure this runs out of the directory the script is in
 chdir(__dir__);
@@ -22,9 +23,14 @@ $cache = new Cache('posts');
 $files = $cache->retrieve('posts'); // md5s of danbooru posts that have been posted before
 $page = $cache->retrieve('page'); // the last page we have pulled from (if there are no new posts)
 
+//Get cache of bad posts
+$cache->setCache('bad_posts');
+$badPosts = $cache->retrieve('posts'); // should be in the format of [md5 of danbooru post] => time of last attempt
+$cache->setCache('posts');
+
 // Get the first page of posts and see if there are any new ones
 $result = getPosts($search);
-$result = filterExisting($result, $files);
+$result = filterExisting($result);
 
 if ( $result == false ) {
 	/* Danbooru has an anonymous user page limit of 1000
@@ -87,11 +93,22 @@ do {
 // Done with the image now.
 unlink($filename);
 
-// If post was successful, add 
+// If post was successful, add to posts cache. If unsuccessful, add to bad posts
 if ( $posted ) {
 	$new[] = $post['md5'];
 	$files = array_merge($files, $new);
-    $cache->store('posts', $files);
+	$cache->setCache('posts');
+	$cache->store('posts', $files);
+	// If this is a successful post of a previously bad post, remove it
+	if ( isset($badPosts[$post['md5']]) ) {
+		unset($badPosts[$post['md5']]);
+		$cache->setCache('bad_posts');
+		$cache->store('posts', $badPosts);
+	}
+} else {
+	$badPosts[$post['md5']] = time();
+	$cache->setCache('bad_posts');
+	$cache->store('posts', $badPosts);
 }
 
 function getPosts($search) {
@@ -110,7 +127,10 @@ function getPosts($search) {
 	return $result;
 }
 
-function filterExisting($result, $cache) {
+function filterExisting($result) {
+	global $files;
+	global $badPosts;
+
 	if ( !is_array($result) ) {
 		echo "Woah, that's a bad error (provided thing to filter not an array, maybe Danbooru is down?)\n";
 		die;
@@ -122,17 +142,19 @@ function filterExisting($result, $cache) {
 	 * gold-only, etc,) do not have an MD5
 	 * Filter out pixiv ugoira posts, as they are just zip files, and cannot be
 	 * posted to twitter - these posts have the 'pixiv_ugoira_frame_data' key
-	 * I believe I had mp4s removed due to the lack of status checking (and I
-	 * was not aware of it at the time,) this should be safely re-added now
+	 * Filter out bad posts that have been attempted recently, so they don't
+	 * prevent posts from being made for hours on end
 	 */
 	foreach ( $result as $r_key => $r ) {
 		if ( !array_key_exists('md5', $r) ) {
 			unset($result[$r_key]);
-		} elseif ( in_array($r['md5'], $cache) ) {
+		} elseif ( in_array($r['md5'], $files) ) {
 			unset($result[$r_key]);
 		} elseif ( isset($r['pixiv_ugoira_frame_data']) ) {
 			unset($result[$r_key]);
 		} elseif ( isset($r['is_deleted']) && ($r['is_deleted'] == 1) ) {
+			unset($result[$r_key]);
+		} elseif ( isset($badPosts[$r['md5']]) && (time() - $badPosts[$r['md5']]) < POST_RETRY_TIME ) {
 			unset($result[$r_key]);
 		}
 	}
