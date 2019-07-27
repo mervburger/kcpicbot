@@ -1,8 +1,8 @@
 <?php
 echo "Running at: " . date('m-d-Y H:i:s') . "\n";
 // Twitter OAuth
-require "vendor/autoload.php";
-require_once 'vendor/cosenary/simple-php-cache/cache.class.php';
+require "../vendor/autoload.php";
+require_once '../vendor/cosenary/simple-php-cache/cache.class.php';
 use Abraham\TwitterOAuth\TwitterOAuth;
 
 // Constants definitions
@@ -11,59 +11,19 @@ define('MAX_ATTEMPTS', 5);
 // Ensure this runs out of the directory the script is in
 chdir(__dir__);
 
-//Format search string, and make it JSON
-$search = array (
-	'tags' => 'kantai_collection -webm',
-	'limit' => '200',
-);
+//Danbooru API Endpoint
+$apiurl = 'https://safebooru.donmai.us/posts/3547158.json'; // Known bad post
 
-// Get our cache
-$cache = new Cache('posts');
-$files = $cache->retrieve('posts'); // md5s of danbooru posts that have been posted before
-$page = $cache->retrieve('page'); // the last page we have pulled from (if there are no new posts)
 
-// Get the first page of posts and see if there are any new ones
-$result = getPosts($search);
-$result = filterExisting($result, $files);
+//cURL
+$result = exec('curl -X GET "' . $apiurl . '" -H "Content-Type: application/json"');
 
-if ( $result == false ) {
-	/* Danbooru has an anonymous user page limit of 1000
-	 * Gold users can go up to 2000, platinum up to 5000 (a general TODO is
-	 * support for Danbooru API keys and the differences between these
-	 * accounts.)
-	 * This solution assumes posts were likely missed over time, so just reset
-	 * the page counter and try again from the beginning.
-	 */ 
-	if ( $page > 1000 ) {
-		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
-		echo "Resetting page number and hoping...\n";
-		$cache->erase('page');
-		$page = 1;
-	}
-	$i = (!empty($page)) ? $page : 1;
-	// No new posts available, go through the history
-	while ( $result == false && $i <= 1000 ) {
-		echo "No posts available! Trying page " . $i . "\n";
-		$search['page'] = $i;
-		$result = getPosts($search);
-		$result = filterExisting($result, $files);
-		if ( $result == false ) {
-			$i++;
-		}
-	}
-	$cache->store('page', $i);
-	if ( $i > 1000 ) {
-		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
-		echo "Next execution will reset page counter and try again.\n";
-		die;
-	}
-}
-
-echo "Number of posts available" . (isset($i) ? " (On page " . $i . ")" : '') . ": " . count($result) . "\n";
+//Take result and parse it
+$result = json_decode($result, true);
 
 // Select first (newest) post, and print it for debug purposes
-$post = $result[0];
-$filename = 'images/' . $post['md5'].substr($post['large_file_url'], -4);
+$post = $result;
+$filename = $post['md5'].substr($post['large_file_url'], -4);
 print_r($post);
 echo "\n";
 
@@ -75,11 +35,12 @@ if ( substr($post['large_file_url'], 0, 4) === 'http' ) {
 }
 exec('wget -O ' . $filename . ' ' . $url);
 
-// Attempt to post tweet.
+// Post tweet, if successful, add the post to the cache so we don't repost it.
+// If unsucessful, add the post to the bad files cache
 $posted = false;
 $postAttempts = 0;
 do {
-	echo "Attempting to post tweet... \n";
+    echo "Post attempt " . $postAttempts+1 . "\n";
 	$posted = postTweet($post, $filename);
 	$postAttempts++;
 } while ( $postAttempts < MAX_ATTEMPTS && $posted == false );
@@ -87,11 +48,13 @@ do {
 // Done with the image now.
 unlink($filename);
 
-// If post was successful, add 
 if ( $posted ) {
 	$new[] = $post['md5'];
 	$files = array_merge($files, $new);
+    //set correct cache when we add multiple caches
     $cache->store('posts', $files);
+} else {
+    echo "Post failed. You expect this.\n";
 }
 
 function getPosts($search) {
@@ -150,7 +113,7 @@ function filterExisting($result, $cache) {
 
 // Make a Twitter API connection and make a Tweet, with the provided post and media file
 function postTweet($post, $filename) {
-	include 'auth.php'; // File with keys and secret keys
+	include '../auth.php'; // File with keys and secret keys
 
 	/* Make Twitter Connection, set timeouts to be appropriate for my internet
 	 * connection. The default values would sometimes timeout during the file
@@ -208,6 +171,9 @@ function postTweet($post, $filename) {
 
 	print_r($picture);
 
+	// We never need the actual image file after this, just unlink it now.
+	//unlink($filename);
+
 	/* We need to wait while twitter potentially needs to processes our upload
 	 * Status checking only needs to be done on videos and gifs if Twitter says
 	 * it needs to be done with the processing_info property after a FINALIZE
@@ -219,7 +185,12 @@ function postTweet($post, $filename) {
 			do {
 				echo "Waiting for twitter processing... \n";
 				$upStatus = $connection->mediaStatus($picture->media_id_string);
-				sleep(10);
+				if ($upStatus->processing_info->state == 'failed') {
+					echo "Upload failed!";
+					print_r($upStatus);
+					return false;
+				}
+				sleep(5);
 				$limit++;
 				if ( $limit == MAX_ATTEMPTS ) {
 					echo "Processing limit met! Tweet will likely fail! Debug: \n";
