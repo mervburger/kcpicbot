@@ -5,6 +5,9 @@ require "vendor/autoload.php";
 require_once 'vendor/cosenary/simple-php-cache/cache.class.php';
 use Abraham\TwitterOAuth\TwitterOAuth;
 
+// Load config
+include 'auth.php'; // File with keys and secret keys
+
 // Constants definitions
 define('MAX_ATTEMPTS', 5);
 define('POST_RETRY_TIME', 21600); // Time between when a bad post can be attempted again, in seconds
@@ -12,10 +15,31 @@ define('POST_RETRY_TIME', 21600); // Time between when a bad post can be attempt
 // Ensure this runs out of the directory the script is in
 chdir(__dir__);
 
-//Format search string, and make it JSON
+//Search strings
+//order for tags matters - if you have more tags specified than your userlevel allows, only the first x will be used
 $search = array (
-	'tags' => 'kantai_collection -webm',
+	'tags' => array(
+		'kantai_collection',
+		'-webm',
+		'-status:banned',
+	),
 	'limit' => '200',
+);
+
+// Userlevel config
+$limits = array(
+	20 => array(
+		'page' => 1000,
+		'tag' => 2,
+	),
+	30 => array(
+		'page' => 2000,
+		'tag' => 6,
+	),
+	31 => array(
+		'page' => 5000,
+		'tag' => 12,
+	)
 );
 
 // Get our cache
@@ -28,27 +52,58 @@ $cache->setCache('bad_posts');
 $badPosts = $cache->retrieve('posts'); // should be in the format of [md5 of danbooru post] => time of last attempt
 $cache->setCache('posts');
 
-// Get the first page of posts and see if there are any new ones
-$result = getPosts($search);
-$result = filterExisting($result);
+//Determine if Danbooru login and API key are provided. If so, determine userlevel and set limits
+if ( (isset($booru_login) && isset($booru_key)) && (!empty($booru_login) && !empty($booru_key)) ) {
+	$booru_user = getUser($booru_login, $booru_key);
+}
+print_r($booru_user);
+// Get the user's level, and appropriate limits
+if ( isset($booru_user) ) {
+	// Check if getUser got a valid user result
+	if ($booru_user === false) {
+		echo "Invalid user provided in booru_login and booru_key, continuing as basic user...\n";
+		$userLevel = 20;
+	} else {
+		// I can only guess what kinds of limits exist for other userlevels that I'll never have. I presume they're like Platinum users?
+		if ( in_array($booru_user['level'], array(32, 35, 40, 50)) ) {
+			echo "The user information you provided is for a higher level than Platinum - assuming limits for Platinum user...\n";
+			$userLevel = 31;
+		}
 
+		// Make sure provided level is configured in $limits above
+		if ( isset($limits[$booru_user['level']]) ) {
+			$userLevel = $booru_user['level'];
+		} else {
+			echo "I don't know what kind of user level you have - assuming limits for basic user...\n";
+			$userLevel = 20;
+		}
+	}
+}
+
+$userLimits = $limits[$userLevel];
+
+
+// Get the first page of posts and see if there are any new ones
+$result = getPosts($search, $booru_login, $booru_key);
+$result = filterExisting($result);
+print_r($result);
+die;
 if ( $result == false ) {
-	/* Danbooru has an anonymous user page limit of 1000
-	 * Gold users can go up to 2000, platinum up to 5000 (a general TODO is
-	 * support for Danbooru API keys and the differences between these
-	 * accounts.)
+	/* Check to make sure we aren't past the page limit for your user level
+	 * Danbooru has an anonymous user page limit of 1000
+	 * Gold users can go up to 2000, platinum up to 5000
 	 * This solution assumes posts were likely missed over time, so just reset
 	 * the page counter and try again from the beginning.
 	 */ 
-	if ( $page > 1000 ) {
-		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
+	if ( $page > $userLimits['page'] ) {
+		echo "Page exceeded page limit for your user level.\n";
 		echo "Resetting page number and hoping...\n";
 		$cache->erase('page');
 		$page = 1;
 	}
 	$i = (!empty($page)) ? $page : 1;
 	// No new posts available, go through the history
-	while ( $result == false && $i <= 1000 ) {
+	while ( $result == false && $i <= $userLimits['page'] ) {
 		echo "No posts available! Trying page " . $i . "\n";
 		$search['page'] = $i;
 		$result = getPosts($search);
@@ -58,8 +113,8 @@ if ( $result == false ) {
 		}
 	}
 	$cache->store('page', $i);
-	if ( $i > 1000 ) {
-		echo "Pages exceeded 1000! Danbooru does not allow anonymous user access after that page!\n";
+	if ( $i > $userLimits ) {
+		echo "Pages exceeded user level limit! Danbooru will not allow user access after that page!\n";
 		echo "Next execution will reset page counter and try again.\n";
 		die;
 	}
@@ -111,15 +166,52 @@ if ( $posted ) {
 	$cache->store('posts', $badPosts);
 }
 
-function getPosts($search) {
+// Danbooru functions
+
+// Gets user data from Danbooru
+function getUser($login, $key) {
+	// Danbooru Profile API Endpoint
+	$apiurl = 'https://safebooru.donmai.us/profile.json';
+
+	$result = exec('curl -u "' . $login . ':' . $key . '" -X GET "' . $apiurl .'" -H "Content-Type: application/json"');
+
+	$result = json_decode($result, true);
+
+	// Check if we got a valid result. Bad results have { "success" : false, ... } as their return
+	if ( isset($result['success']) && $result['success'] === false ) {
+		return null;
+	}
+
+	return $result;
+}
+
+// Gets posts from Danbooru as a json array. Optionally, provide login and API key for user access
+function getPosts($search, $login = null, $key = null) {
+	global $userLimits;
+
 	//Danbooru API Endpoint
 	$apiurl = 'https://safebooru.donmai.us/posts.json';
 
 	//JSON encode the search array
+	if ( is_array($search['tags']) ) {
+		$i = 1;
+		$tagString = '';
+		foreach ( $search['tags'] as $tag ) {
+			if ( $i < $userLimits['tag'] ) {
+				$tagString .= $tag . ' ';
+			}
+			$i++;
+		}
+		$search['tags'] = $tagString;
+	}
 	$search = json_encode($search);
-
+	
 	//cURL
-	$result = exec('curl -X GET "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
+	if ( !is_null($login) && !is_null($key) ) {
+		$result = exec('curl -u "' . $login . ':' . $key . '" -X GET "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
+	} else {
+		$result = exec('curl -X GET "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
+	}
 
 	//Take result and parse it
 	$result = json_decode($result, true);
@@ -127,6 +219,7 @@ function getPosts($search) {
 	return $result;
 }
 
+// Filters array of Danbooru posts
 function filterExisting($result) {
 	global $files;
 	global $badPosts;
@@ -138,10 +231,13 @@ function filterExisting($result) {
 
 	/* Filter out Danbooru Gold-only, removed posts, or anything that has been
 	 * posted already.
+	 * If a post does not have an MD5, it will likely not be postable.
 	 * Danbooru posts you do not have access to (removed due to artist claim,
-	 * gold-only, etc,) do not have an MD5
+	 * gold-only, etc,) do not have an MD5. - If using a gold or platinum account,
+	 * you'll need to add '-status:banned' to your list of tags if you want to respect that (please do that.)
 	 * Filter out pixiv ugoira posts, as they are just zip files, and cannot be
 	 * posted to twitter - these posts have the 'pixiv_ugoira_frame_data' key
+	 * Filter out deleted posts. I don't know what kind of unmoderated garbage is here.
 	 * Filter out bad posts that have been attempted recently, so they don't
 	 * prevent posts from being made for hours on end
 	 */
@@ -172,7 +268,7 @@ function filterExisting($result) {
 
 // Make a Twitter API connection and make a Tweet, with the provided post and media file
 function postTweet($post, $filename) {
-	include 'auth.php'; // File with keys and secret keys
+	global $consumer_key, $consumer_secret, $access_token, $access_secret;
 
 	/* Make Twitter Connection, set timeouts to be appropriate for my internet
 	 * connection. The default values would sometimes timeout during the file
