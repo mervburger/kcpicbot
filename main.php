@@ -56,7 +56,7 @@ $cache->setCache('posts');
 if ( (isset($booru_login) && isset($booru_key)) && (!empty($booru_login) && !empty($booru_key)) ) {
 	$booru_user = getUser($booru_login, $booru_key);
 }
-print_r($booru_user);
+//print_r($booru_user);
 // Get the user's level, and appropriate limits
 if ( isset($booru_user) ) {
 	// Check if getUser got a valid user result
@@ -86,8 +86,8 @@ $userLimits = $limits[$userLevel];
 // Get the first page of posts and see if there are any new ones
 $result = getPosts($search, $booru_login, $booru_key);
 $result = filterExisting($result);
-print_r($result);
-die;
+//print_r($result);
+//die;
 if ( $result == false ) {
 	/* Check to make sure we aren't past the page limit for your user level
 	 * Danbooru has an anonymous user page limit of 1000
