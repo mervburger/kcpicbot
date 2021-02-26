@@ -22,6 +22,7 @@ $search = array (
 		'kantai_collection',
 		'-webm',
 		'-status:banned',
+		'-koorimizu',
 	),
 	'limit' => '200',
 );
@@ -106,7 +107,7 @@ if ( $result == false ) {
 	while ( $result == false && $i <= $userLimits['page'] ) {
 		echo "No posts available! Trying page " . $i . "\n";
 		$search['page'] = $i;
-		$result = getPosts($search);
+		$result = getPosts($search, $booru_login, $booru_key);
 		$result = filterExisting($result, $files);
 		if ( $result == false ) {
 			$i++;
