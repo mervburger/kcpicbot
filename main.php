@@ -23,6 +23,7 @@ $search = array (
 		'-webm',
 		'-status:banned',
 		'-koorimizu',
+		'-have_to_pee',
 	),
 	'limit' => '200',
 );
@@ -241,6 +242,9 @@ function filterExisting($result) {
 	 * Filter out deleted posts. I don't know what kind of unmoderated garbage is here.
 	 * Filter out bad posts that have been attempted recently, so they don't
 	 * prevent posts from being made for hours on end
+	 * Filter out posts that are too big to upload to twitter (15mb)
+	 * Filter out files with the webm extention (because people are assholes that upload webms, but don't include
+	 * the webm meta tag)
 	 */
 	foreach ( $result as $r_key => $r ) {
 		if ( !array_key_exists('md5', $r) ) {
@@ -253,7 +257,12 @@ function filterExisting($result) {
 			unset($result[$r_key]);
 		} elseif ( isset($badPosts[$r['md5']]) && (time() - $badPosts[$r['md5']]) < POST_RETRY_TIME ) {
 			unset($result[$r_key]);
+		} elseif ( isset($r['file_size']) && $r['file_size'] > 15000000 ) {
+			unset($result[$r_key]);
+		} elseif ( isset($r['large_file_url']) && preg_match("/.webm$/i", $r['large_file_url'])) {
+			unset($result[$r_key]);
 		}
+
 	}
 
 	// Check if the previous loop removed every post found.
