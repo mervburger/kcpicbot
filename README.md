@@ -5,7 +5,7 @@ Used for my bot [@kcpicbot](https://twitter.com/kcpicbot).
 
 Hard-coded for the `kantai_collection` tag, but can be easily modified to use any combination of tags.
 
-Current version runs on PHP 7.0 on openmediavault 4 (Debian Stretch.) Developed with PHP 7.3 on Fedora 29 and 30.
+Current version runs on PHP 7.3 on openmediavault 5 (Debian Buster.)
 
 Uses [TwitterOAuth by Abraham Williams](https://twitteroauth.com/) for Twitter authentication integration, and [Simple PHP Cache by Christian Metz](https://github.com/cosenary/Simple-PHP-Cache) for cacheing.
 
