@@ -89,9 +89,9 @@ $userLimits = $limits[$userLevel];
 
 // Get the first page of posts and see if there are any new ones
 $result = getPosts($search, $booru_login, $booru_key);
-//var_dump($result); die;
+//var_dump($result);
 $result = filterExisting($result);
-//print_r($result);
+//var_dump($result);
 //die;
 if ( $result == false ) {
 	/* Check to make sure we aren't past the page limit for your user level
@@ -197,23 +197,21 @@ function getPosts($search, $login = null, $key = null) {
 	//Danbooru API Endpoint
 	$apiurl = BOORU.'/posts.json';
 
-	//JSON encode the search array
-	if ( is_array($search['tags']) ) {
-		$i = 1;
-		$tagString = '';
-		foreach ( $search['tags'] as $tag ) {
-			if ( $i < $userLimits['tag'] ) {
-				$tagString .= $tag . ' ';
-			}
-			$i++;
-		}
-		$search['tags'] = $tagString;
+	//Build our parameters in danboorus stupid hash syntax
+	// See: https://danbooru.donmai.us/wiki_pages/help%3Ahash_syntax
+	// don't be tricked into thinking you can use json requests like the wiki shows, shit just doesn't work
+	$parameters = '';
+	$search['tags'] = implode('+', $search['tags']); // Convert our tags list into a string
+	foreach($search as $k => $v) {
+		$parameters .= $k . '=' . $v . '&';
 	}
-	$search = json_encode($search);
-	var_dump($search);
+
+	//$search = json_encode($search);
+	//var_dump($parameters);
+
 	//cURL
 	if ( !is_null($login) && !is_null($key) ) {
-		$result = exec('curl -u "' . $login . ':' . $key . '" -G "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
+		$result = exec('curl -u "' . $login . ':' . $key . '" -G "' . $apiurl . '" -d \''. $parameters . '\' -H "Content-Type: application/json"');
 	} else {
 		$result = exec('curl -G "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
 	}
