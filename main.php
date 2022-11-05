@@ -11,7 +11,7 @@ include 'auth.php'; // File with keys and secret keys
 // Constants definitions
 define('MAX_ATTEMPTS', 5);
 define('POST_RETRY_TIME', 21600); // Time between when a bad post can be attempted again, in seconds
-
+define('BOORU', 'https://safebooru.donmai.us');
 // Ensure this runs out of the directory the script is in
 chdir(__dir__);
 
@@ -58,7 +58,7 @@ $cache->setCache('posts');
 if ( (isset($booru_login) && isset($booru_key)) && (!empty($booru_login) && !empty($booru_key)) ) {
 	$booru_user = getUser($booru_login, $booru_key);
 }
-//print_r($booru_user);
+//var_dump($booru_user);
 // Get the user's level, and appropriate limits
 if ( isset($booru_user) ) {
 	// Check if getUser got a valid user result
@@ -80,6 +80,8 @@ if ( isset($booru_user) ) {
 			$userLevel = 20;
 		}
 	}
+} else {
+	$userLevel = 20; // getUser returned null. Anonymous level is 20
 }
 
 $userLimits = $limits[$userLevel];
@@ -87,6 +89,7 @@ $userLimits = $limits[$userLevel];
 
 // Get the first page of posts and see if there are any new ones
 $result = getPosts($search, $booru_login, $booru_key);
+//var_dump($result); die;
 $result = filterExisting($result);
 //print_r($result);
 //die;
@@ -134,7 +137,7 @@ echo "\n";
 if ( substr($post['large_file_url'], 0, 4) === 'http' ) {
 	$url = $post['large_file_url'];
 } else {
-	$url = 'https://safebooru.donmai.us'.$post['large_file_url'];
+	$url = BOORU.$post['large_file_url'];
 }
 exec('wget -O ' . $filename . ' ' . $url);
 
@@ -173,9 +176,9 @@ if ( $posted ) {
 // Gets user data from Danbooru
 function getUser($login, $key) {
 	// Danbooru Profile API Endpoint
-	$apiurl = 'https://safebooru.donmai.us/profile.json';
+	$apiurl = BOORU . '/profile.json';
 
-	$result = exec('curl -u "' . $login . ':' . $key . '" -X GET "' . $apiurl .'" -H "Content-Type: application/json"');
+	$result = exec('curl -u "' . $login . ':' . $key . '" -G "' . $apiurl .'" -H "Content-Type: application/json"');
 
 	$result = json_decode($result, true);
 
@@ -192,7 +195,7 @@ function getPosts($search, $login = null, $key = null) {
 	global $userLimits;
 
 	//Danbooru API Endpoint
-	$apiurl = 'https://safebooru.donmai.us/posts.json';
+	$apiurl = BOORU.'/posts.json';
 
 	//JSON encode the search array
 	if ( is_array($search['tags']) ) {
@@ -207,16 +210,20 @@ function getPosts($search, $login = null, $key = null) {
 		$search['tags'] = $tagString;
 	}
 	$search = json_encode($search);
-	
+	var_dump($search);
 	//cURL
 	if ( !is_null($login) && !is_null($key) ) {
-		$result = exec('curl -u "' . $login . ':' . $key . '" -X GET "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
+		$result = exec('curl -u "' . $login . ':' . $key . '" -G "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
 	} else {
-		$result = exec('curl -X GET "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
+		$result = exec('curl -G "' . $apiurl . '" -d \''. $search . '\' -H "Content-Type: application/json"');
 	}
 
 	//Take result and parse it
 	$result = json_decode($result, true);
+
+	if (isset($result['success']) && $result['success'] === false) {
+		die('Danbooru error: ' . $result['error'] . ' - ' . $result['message']);
+	}
 
 	return $result;
 }
